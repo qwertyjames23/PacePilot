@@ -267,15 +267,21 @@ class LocationService : Service(), TextToSpeech.OnInitListener {
         if (completedKm <= lastSpokenKm) return
 
         for (km in (lastSpokenKm + 1)..completedKm) {
-            val kmTarget = targetForKilometer(km)
-            val message = if (currentPaceSec.isNaN()) {
-                "$km kilometer completed. Target pace ${paceForSpeech(kmTarget)}."
-            } else {
-                "$km kilometer completed. Current pace ${paceForSpeech(currentPaceSec)}. " +
-                    "Target pace ${paceForSpeech(kmTarget)}. " +
-                    "${paceDeltaForSpeech(currentPaceSec, kmTarget)}."
+            val completedTarget = targetForKilometer(km)
+            val nextTarget = targetForCurrentKilometer(km)  // target for km+1
+
+            val sb = StringBuilder()
+            sb.append("$km kilometer completed. ")
+
+            if (!currentPaceSec.isNaN()) {
+                sb.append("Pace ${paceForSpeech(currentPaceSec)}. ")
+                sb.append("${paceDeltaForSpeech(currentPaceSec, completedTarget)}. ")
             }
-            tts?.speak(message, TextToSpeech.QUEUE_ADD, null, "km_$km")
+
+            // Announce NEXT km's target so runner knows what to aim for NOW
+            sb.append("KM ${km + 1} target: ${paceForSpeech(nextTarget)}.")
+
+            tts?.speak(sb.toString(), TextToSpeech.QUEUE_ADD, null, "km_$km")
         }
         lastSpokenKm = completedKm
     }
