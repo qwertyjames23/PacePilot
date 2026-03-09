@@ -92,6 +92,7 @@ class MainActivity : AppCompatActivity() {
     private val kmTargetRows = linkedMapOf<Int, LinearLayout>()
     private var nextKmTarget = 2
     private val kmRowPaceSecs = linkedMapOf<Int, Int>()
+    private val kmRowDisplayViews = linkedMapOf<Int, TextView>()
     private val colorPageTop = Color.parseColor("#0B111D")
     private val colorPageBottom = Color.parseColor("#05070C")
     private val colorCard = Color.parseColor("#141D2E")
@@ -796,6 +797,8 @@ class MainActivity : AppCompatActivity() {
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
 
+        kmRowDisplayViews[km] = display
+
         val hiddenInput = EditText(this).apply {
             visibility = View.GONE
             setText(secsToPaceString(kmRowPaceSecs[km] ?: defaultSec))
@@ -900,6 +903,7 @@ class MainActivity : AppCompatActivity() {
         kmTargetsContainer.removeView(row)
         kmPaceInputs.remove(km)
         kmRowPaceSecs.remove(km)
+        kmRowDisplayViews.remove(km)
         updateNextKmTarget()
     }
 
@@ -1029,9 +1033,11 @@ class MainActivity : AppCompatActivity() {
         val baseRaw = prefs.getString(KEY_BASE_TARGET_RAW, "").orEmpty()
         if (baseRaw.isNotBlank()) {
             targetInput.setText(baseRaw)
-            parsePaceSeconds(baseRaw)?.toInt()?.let { kmRowPaceSecs[1] = it }
-            // Sync km 1 nudge row backing input
-            kmPaceInputs[1]?.setText(baseRaw)
+            parsePaceSeconds(baseRaw)?.toInt()?.let { restoredSec ->
+                kmRowPaceSecs[1] = restoredSec
+                kmRowDisplayViews[1]?.text = secsToPaceString(restoredSec)
+                kmPaceInputs[1]?.setText(secsToPaceString(restoredSec))
+            }
         }
 
         val kmRowsRaw = prefs.getString(KEY_KM_ROWS_RAW, "").orEmpty()
@@ -1050,6 +1056,10 @@ class MainActivity : AppCompatActivity() {
             for ((km, raw) in decodedRows) {
                 parsePaceSeconds(raw)?.toInt()?.let { kmRowPaceSecs[km] = it }
                 addKmTargetField(km)
+                parsePaceSeconds(raw)?.toInt()?.let { restoredSec ->
+                    kmRowPaceSecs[km] = restoredSec
+                    kmRowDisplayViews[km]?.text = secsToPaceString(restoredSec)
+                }
                 kmPaceInputs[km]?.setText(raw)
             }
         }
