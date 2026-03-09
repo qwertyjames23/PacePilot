@@ -112,6 +112,7 @@ class LocationService : Service(), TextToSpeech.OnInitListener {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    @SuppressLint("MissingPermission")
     private fun startTracking() {
         if (!hasFinePermission()) {
             stopSelf()
@@ -133,6 +134,17 @@ class LocationService : Service(), TextToSpeech.OnInitListener {
 
         startForeground(NOTIFICATION_ID, buildNotification(latest))
         requestLocationUpdates()
+
+        // Seed calculator with last known location for immediate pace display
+        if (hasFinePermission()) {
+            fused.lastLocation.addOnSuccessListener { loc ->
+                if (loc != null && isTracking && !isPaused) {
+                    latest = calculator.onLocation(loc)
+                    publishMetrics(latest)
+                }
+            }
+        }
+
         publishMetrics(latest)
     }
 
@@ -172,6 +184,7 @@ class LocationService : Service(), TextToSpeech.OnInitListener {
                 .setMinUpdateIntervalMillis(1000L)
                 .setMinUpdateDistanceMeters(5f)
                 .setMaxUpdateDelayMillis(3000L)
+                .setWaitForAccurateLocation(false)
                 .build()
         } else {
             @Suppress("DEPRECATION")

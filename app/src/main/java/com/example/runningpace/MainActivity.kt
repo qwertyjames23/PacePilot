@@ -552,15 +552,20 @@ class MainActivity : AppCompatActivity() {
     private fun startGpsWarmup() {
         if (warmupActive || currentTracking) return
         if (!hasPermission(Manifest.permission.ACCESS_FINE_LOCATION)) return
+
+        // Immediately grab last known location for near-instant first fix
+        warmupClient.lastLocation.addOnSuccessListener { /* pre-warm only */ }
+
         val request = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 5000L)
-                .setMinUpdateIntervalMillis(3000L)
+            LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 1000L)
+                .setMinUpdateIntervalMillis(500L)
+                .setWaitForAccurateLocation(false)
                 .build()
         } else {
             @Suppress("DEPRECATION")
             LocationRequest.create().apply {
-                interval = 5000L
-                fastestInterval = 3000L
+                interval = 1000L
+                fastestInterval = 500L
                 priority = LocationRequest.PRIORITY_HIGH_ACCURACY
             }
         }
