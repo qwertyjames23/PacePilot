@@ -55,6 +55,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var heroPaceValue: TextView
     private lateinit var heroDistanceValue: TextView
     private lateinit var kmProgressText: TextView
+    private lateinit var kmProgressRow: LinearLayout
+    private lateinit var kmProgressLabel: TextView
+    private lateinit var kmProgressBar: android.widget.ProgressBar
     private lateinit var splitsText: TextView
     private lateinit var historyText: TextView
     private lateinit var setupSection: LinearLayout
@@ -88,6 +91,7 @@ class MainActivity : AppCompatActivity() {
     private val kmPaceInputs = linkedMapOf<Int, EditText>()
     private val kmTargetRows = linkedMapOf<Int, LinearLayout>()
     private var nextKmTarget = 2
+    private val kmRowPaceSecs = linkedMapOf<Int, Int>()
     private val colorPageTop = Color.parseColor("#0B111D")
     private val colorPageBottom = Color.parseColor("#05070C")
     private val colorCard = Color.parseColor("#141D2E")
@@ -158,11 +162,14 @@ class MainActivity : AppCompatActivity() {
 
             if (tracking && !pace.isNaN()) {
                 val currentKm = completedKm + 1
-                kmProgressText.text = "KM $currentKm  |  ${String.format(Locale.US, "%.0f", kmProgress)} / 1000 m"
-                kmProgressText.visibility = View.VISIBLE
+                val progressMeters = kmProgress.toInt().coerceIn(0, 1000)
+                kmProgressLabel.text = "KM $currentKm  •  ${progressMeters}m / 1000m"
+                kmProgressBar.progress = progressMeters
+                kmProgressRow.visibility = View.VISIBLE
             } else {
-                kmProgressText.visibility = View.GONE
+                kmProgressRow.visibility = View.GONE
             }
+            kmProgressText.visibility = View.GONE  // always hidden now
 
             val (statusText, statusColor) = when {
                 !tracking -> "Stopped" to colorTextSecondary
@@ -214,11 +221,39 @@ class MainActivity : AppCompatActivity() {
         val itemGap = dp(12)
         val sectionGap = dp(22)
 
+        // ── Polished header block ─────────────────────────────────────────
+        val headerDot = TextView(this).apply {
+            text = "●"
+            setTextColor(colorAccent)
+            textSize = 18f
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { marginEnd = dp(8) }
+        }
         val headerTitle = TextView(this).apply {
             text = "PacePilot"
             setTextColor(colorTextPrimary)
-            textSize = 32f
-            setTypeface(Typeface.DEFAULT_BOLD)
+            textSize = 28f
+            setTypeface(typeface, Typeface.BOLD)
+            letterSpacing = -0.02f
+        }
+        val headerTitleRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            addView(headerDot)
+            addView(headerTitle)
+        }
+        val headerSubtitle = TextView(this).apply {
+            text = "Smart Running Pace Guide"
+            setTextColor(colorTextSecondary)
+            textSize = 12f
+            letterSpacing = 0.04f
+        }
+        val headerBlock = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(headerTitleRow)
+            addView(headerSubtitle)
         }
 
         // Full-width state banner — hidden when stopped, colored when running/paused
@@ -240,30 +275,42 @@ class MainActivity : AppCompatActivity() {
 
         // Setup section — target inputs, hidden during active run
         val targetCard = createCardContainer()
+
+        // Hidden backing store for km 1 (the nudge row handles display)
         targetInput = EditText(this).apply {
-            hint = "1 km target pace (mm:ss)"
+            visibility = View.GONE
             setText("7:20")
-            inputType = InputType.TYPE_CLASS_DATETIME
-            styleInput(this)
         }
+        kmRowPaceSecs[1] = 7 * 60 + 20
+
+        // Build km 1 nudge row directly (not via addKmTargetField to avoid putting it in kmTargetsContainer)
+        val km1Row = createPaceInputRow(1)
+
         val kmTargetsTitle = TextView(this).apply {
-            text = "Per-km target pace (optional)"
+            text = "RACE PLAN  •  per km"
             setTextColor(colorTextSecondary)
-            textSize = 13f
+            textSize = 11f
+            letterSpacing = 0.10f
+            setTypeface(typeface, Typeface.BOLD)
         }
         kmTargetsContainer = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         addKmTargetButton = Button(this).apply {
-            text = "Add next km target"
-            styleButton(this, colorCard, colorTextPrimary, borderColor = colorCardBorder)
+            text = "+ Add KM"
+            isAllCaps = false
+            textSize = 14f
+            setTypeface(Typeface.DEFAULT_BOLD)
+            setTextColor(colorAccent)
+            styleButton(this, Color.parseColor("#0A1E1A"), colorAccent, borderColor = withAlpha(colorAccent, 0.4f))
             setOnClickListener { addKmTargetField(nextKmTarget) }
         }
         addKmTargetField(2)
         addKmTargetField(3)
 
-        addWithTopMargin(targetCard, targetInput, 0)
-        addWithTopMargin(targetCard, kmTargetsTitle, itemGap)
+        addWithTopMargin(targetCard, targetInput, 0)       // hidden backing store
+        addWithTopMargin(targetCard, km1Row, 0)            // visible km 1 nudge row
+        addWithTopMargin(targetCard, kmTargetsTitle, dp(16))
         addWithTopMargin(targetCard, kmTargetsContainer, dp(6))
-        addWithTopMargin(targetCard, addKmTargetButton, itemGap)
+        addWithTopMargin(targetCard, addKmTargetButton, dp(12))
 
         setupSection = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         addWithTopMargin(setupSection, targetCard, 0)
@@ -330,13 +377,34 @@ class MainActivity : AppCompatActivity() {
         paceDistRow.addView(paceCol)
         paceDistRow.addView(distCol)
 
-        // ── KM progress chip ──────────────────────────────────────────────
-        kmProgressText = TextView(this).apply {
+        // ── KM progress — label + horizontal bar ─────────────────────────
+        kmProgressLabel = TextView(this).apply {
             text = ""
             setTextColor(colorTextSecondary)
-            textSize = 13f
-            visibility = View.GONE
+            textSize = 12f
+            letterSpacing = 0.04f
         }
+        kmProgressBar = android.widget.ProgressBar(
+            this, null, android.R.attr.progressBarStyleHorizontal
+        ).apply {
+            max = 1000
+            progress = 0
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(5)
+            ).apply { topMargin = dp(6) }
+            progressTintList = android.content.res.ColorStateList.valueOf(colorAccent)
+            progressBackgroundTintList = android.content.res.ColorStateList.valueOf(
+                Color.parseColor("#1A253A")
+            )
+        }
+        kmProgressRow = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            visibility = View.GONE
+            addView(kmProgressLabel)
+            addView(kmProgressBar)
+        }
+        // keep kmProgressText for any legacy references
+        kmProgressText = TextView(this).apply { visibility = View.GONE; text = "" }
 
         // ── Speed + Target detail row ─────────────────────────────────────
         val speedTargetRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
@@ -366,7 +434,7 @@ class MainActivity : AppCompatActivity() {
             topMargin = dp(14); bottomMargin = dp(16)
         })
         addWithTopMargin(metricsCard, paceDistRow, 0)
-        addWithTopMargin(metricsCard, kmProgressText, dp(12))
+        addWithTopMargin(metricsCard, kmProgressRow, dp(14))
         metricsCard.addView(View(this).apply {
             setBackgroundColor(withAlpha(colorCardBorder, 0.5f))
         }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(1)).apply {
@@ -428,7 +496,7 @@ class MainActivity : AppCompatActivity() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(rootPadding, rootPadding, rootPadding, rootPadding)
-            addView(headerTitle)
+            addView(headerBlock)
         }
         addWithTopMargin(root, stateText, sectionGap)
         addWithTopMargin(root, setupSection, sectionGap)
@@ -452,9 +520,12 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun onStartClicked() {
-        val targetSec = parsePaceSeconds(targetInput.text.toString())
+        // km 1 comes from nudge row backing input (kmPaceInputs[1]) or fallback to targetInput
+        val km1Raw = kmPaceInputs[1]?.text?.toString()?.trim()
+            ?: targetInput.text.toString().trim()
+        val targetSec = parsePaceSeconds(km1Raw)
         if (targetSec == null) {
-            Toast.makeText(this, "Set 1 km target in mm:ss format (2:00–30:00), sample: 7:20", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "KM 1 pace is invalid. Use nudge buttons.", Toast.LENGTH_LONG).show()
             return
         }
         val kmTargets = parseKmTargetsFromBoxes(targetSec)
@@ -605,6 +676,7 @@ class MainActivity : AppCompatActivity() {
             metricsCard.visibility = View.GONE
             buttonRow.visibility = View.GONE
             kmProgressText.visibility = View.GONE
+            if (::kmProgressRow.isInitialized) kmProgressRow.visibility = View.GONE
         } else {
             setupSection.visibility = View.GONE
             startButton.visibility = View.GONE
@@ -675,6 +747,7 @@ class MainActivity : AppCompatActivity() {
         parsed[1] = firstKmTargetSec
 
         for ((km, input) in kmPaceInputs) {
+            if (km == 1) continue  // km 1 already set from firstKmTargetSec
             val raw = input.text.toString().trim()
             if (raw.isEmpty()) continue
 
@@ -691,48 +764,134 @@ class MainActivity : AppCompatActivity() {
             .joinToString(separator = ";") { "${it.key}:${it.value.toInt()}" }
     }
 
-    private fun addKmTargetField(km: Int) {
-        if (kmPaceInputs.containsKey(km)) return
+    private fun secsToPaceString(secs: Int): String {
+        val m = secs / 60
+        val s = secs % 60
+        return String.format(Locale.US, "%d:%02d", m, s)
+    }
+
+    private fun createPaceInputRow(km: Int): LinearLayout {
+        val defaultSec = kmRowPaceSecs.getOrPut(km) { if (km == 1) 7 * 60 + 20 else 7 * 60 }
 
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            setPadding(0, dp(4), 0, dp(4))
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, dp(6), 0, dp(6))
         }
 
         val label = TextView(this).apply {
-            text = "$km km"
+            text = "KM $km"
             setTextColor(colorTextSecondary)
-            textSize = 14f
-            typeface = Typeface.DEFAULT_BOLD
-            layoutParams = LinearLayout.LayoutParams(dp(56), LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                topMargin = dp(10)
-            }
+            textSize = 13f
+            setTypeface(typeface, Typeface.BOLD)
+            layoutParams = LinearLayout.LayoutParams(dp(52), LinearLayout.LayoutParams.WRAP_CONTENT)
         }
 
-        val paceInput = EditText(this).apply {
-            hint = "mm:ss"
-            inputType = InputType.TYPE_CLASS_DATETIME
-            styleInput(this)
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
-                marginEnd = dp(8)
-            }
+        val display = TextView(this).apply {
+            text = secsToPaceString(kmRowPaceSecs[km] ?: defaultSec)
+            setTextColor(colorTextPrimary)
+            textSize = 18f
+            setTypeface(typeface, Typeface.BOLD)
+            gravity = Gravity.CENTER
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
 
-        val deleteButton = Button(this).apply {
-            text = "X"
-            styleButton(this, Color.parseColor("#352136"), colorTextPrimary, borderColor = Color.parseColor("#5B325A"))
-            minimumWidth = 0
-            minWidth = 0
-            setPadding(dp(12), dp(8), dp(12), dp(8))
-            setOnClickListener { removeKmTargetField(km) }
+        val hiddenInput = EditText(this).apply {
+            visibility = View.GONE
+            setText(secsToPaceString(kmRowPaceSecs[km] ?: defaultSec))
+        }
+
+        fun nudge(deltaSec: Int) {
+            val current = kmRowPaceSecs[km] ?: defaultSec
+            val updated = (current + deltaSec).coerceIn(120, 1800)
+            kmRowPaceSecs[km] = updated
+            display.text = secsToPaceString(updated)
+            hiddenInput.setText(secsToPaceString(updated))
+        }
+
+        val minusBtn = Button(this).apply {
+            text = "−"
+            textSize = 18f
+            isAllCaps = false
+            setTypeface(Typeface.DEFAULT_BOLD)
+            setTextColor(colorTextSecondary)
+            setPadding(dp(14), dp(4), dp(14), dp(4))
+            minimumWidth = 0; minWidth = 0; minimumHeight = 0; minHeight = 0
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = dp(10).toFloat()
+                setColor(Color.parseColor("#1A2537"))
+                setStroke(dp(1), colorCardBorder)
+            }
+            layoutParams = LinearLayout.LayoutParams(dp(44), dp(40))
+            setOnClickListener { nudge(-5) }
+        }
+
+        val plusBtn = Button(this).apply {
+            text = "+"
+            textSize = 18f
+            isAllCaps = false
+            setTypeface(Typeface.DEFAULT_BOLD)
+            setTextColor(colorAccent)
+            setPadding(dp(14), dp(4), dp(14), dp(4))
+            minimumWidth = 0; minWidth = 0; minimumHeight = 0; minHeight = 0
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = dp(10).toFloat()
+                setColor(Color.parseColor("#0D2420"))
+                setStroke(dp(1), colorAccent)
+            }
+            layoutParams = LinearLayout.LayoutParams(dp(44), dp(40))
+            setOnClickListener { nudge(+5) }
         }
 
         row.addView(label)
-        row.addView(paceInput)
-        row.addView(deleteButton)
-        kmTargetsContainer.addView(row)
-        kmPaceInputs[km] = paceInput
-        kmTargetRows[km] = row
+        row.addView(minusBtn)
+        row.addView(display)
+        row.addView(plusBtn)
+        row.addView(hiddenInput)
+
+        kmPaceInputs[km] = hiddenInput
+        return row
+    }
+
+    private fun addKmTargetField(km: Int) {
+        if (kmPaceInputs.containsKey(km)) return
+
+        val outerRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+
+        val paceRow = createPaceInputRow(km)
+        paceRow.layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+
+        if (km > 1) {
+            val deleteButton = Button(this).apply {
+                text = "✕"
+                textSize = 13f
+                isAllCaps = false
+                setTextColor(colorTextSecondary)
+                minimumWidth = 0; minWidth = 0; minimumHeight = 0; minHeight = 0
+                setPadding(dp(10), dp(8), dp(10), dp(8))
+                background = GradientDrawable().apply {
+                    shape = GradientDrawable.RECTANGLE
+                    cornerRadius = dp(8).toFloat()
+                    setColor(Color.parseColor("#1A1A2A"))
+                }
+                setOnClickListener { removeKmTargetField(km) }
+                layoutParams = LinearLayout.LayoutParams(dp(36), dp(36)).apply {
+                    marginStart = dp(8)
+                }
+            }
+            outerRow.addView(paceRow)
+            outerRow.addView(deleteButton)
+        } else {
+            outerRow.addView(paceRow)
+        }
+
+        kmTargetsContainer.addView(outerRow)
+        kmTargetRows[km] = outerRow
         updateNextKmTarget()
     }
 
@@ -740,6 +899,7 @@ class MainActivity : AppCompatActivity() {
         val row = kmTargetRows.remove(km) ?: return
         kmTargetsContainer.removeView(row)
         kmPaceInputs.remove(km)
+        kmRowPaceSecs.remove(km)
         updateNextKmTarget()
     }
 
@@ -855,7 +1015,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun persistTargetInputs() {
         val prefs = getSharedPreferences(UI_PREFS, Context.MODE_PRIVATE)
-        val baseRaw = targetInput.text.toString().trim()
+        val baseRaw = kmPaceInputs[1]?.text?.toString()?.trim()
+            ?: targetInput.text.toString().trim()
         val rowsRaw = encodeKmRowsRaw()
         prefs.edit()
             .putString(KEY_BASE_TARGET_RAW, baseRaw)
@@ -868,17 +1029,26 @@ class MainActivity : AppCompatActivity() {
         val baseRaw = prefs.getString(KEY_BASE_TARGET_RAW, "").orEmpty()
         if (baseRaw.isNotBlank()) {
             targetInput.setText(baseRaw)
+            parsePaceSeconds(baseRaw)?.toInt()?.let { kmRowPaceSecs[1] = it }
+            // Sync km 1 nudge row backing input
+            kmPaceInputs[1]?.setText(baseRaw)
         }
 
         val kmRowsRaw = prefs.getString(KEY_KM_ROWS_RAW, "").orEmpty()
         val decodedRows = decodeKmRowsRaw(kmRowsRaw)
         if (decodedRows.isNotEmpty()) {
             kmTargetsContainer.removeAllViews()
-            kmPaceInputs.clear()
-            kmTargetRows.clear()
+            // Remove km 2+ from maps (km 1 stays — it lives outside kmTargetsContainer)
+            val keysToRemove = kmPaceInputs.keys.filter { it >= 2 }
+            keysToRemove.forEach { k ->
+                kmPaceInputs.remove(k)
+                kmTargetRows.remove(k)
+                kmRowPaceSecs.remove(k)
+            }
             nextKmTarget = 2
 
             for ((km, raw) in decodedRows) {
+                parsePaceSeconds(raw)?.toInt()?.let { kmRowPaceSecs[km] = it }
                 addKmTargetField(km)
                 kmPaceInputs[km]?.setText(raw)
             }
@@ -891,6 +1061,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun encodeKmRowsRaw(): String {
         return kmPaceInputs.entries
+            .filter { it.key >= 2 }  // km 1 is saved separately as baseRaw
             .sortedBy { it.key }
             .joinToString(separator = "\n") { (km, input) ->
                 val raw = input.text.toString().trim()
