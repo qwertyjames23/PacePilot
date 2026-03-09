@@ -135,10 +135,12 @@ class LocationService : Service(), TextToSpeech.OnInitListener {
         startForeground(NOTIFICATION_ID, buildNotification(latest))
         requestLocationUpdates()
 
-        // Seed calculator with last known location for immediate pace display
+        // Seed with last known location only if no real fix has arrived yet and it's recent
         if (hasFinePermission()) {
             fused.lastLocation.addOnSuccessListener { loc ->
-                if (loc != null && isTracking && !isPaused) {
+                if (loc != null && isTracking && !isPaused
+                    && latest.distanceMeters == 0.0
+                    && (runStartedAtEpochMs - loc.time) < 30_000L) {
                     latest = calculator.onLocation(loc)
                     publishMetrics(latest)
                 }
