@@ -225,7 +225,7 @@ class MainActivity : AppCompatActivity() {
         val headerDot = TextView(this).apply {
             text = "●"
             setTextColor(colorAccent)
-            textSize = 18f
+            textSize = 28f
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
