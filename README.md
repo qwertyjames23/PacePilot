@@ -2,6 +2,10 @@
 
 An Android running tracker built to solve one specific problem: staying on target pace during a run, not just measuring it after. Real-time GPS tracking with per-kilometer pace targets, voice coaching, and vibration feedback — all without ads, accounts, or subscriptions.
 
+## Screenshots
+
+<img src="screenshots/screen1.jpg" width="300"/> <img src="screenshots/screen2.jpg" width="300"/>
+
 ## Features
 
 **Pace Planning**
