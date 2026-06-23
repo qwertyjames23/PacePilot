@@ -49,9 +49,36 @@ app/src/main/java/com/example/runningpace/
 
 ## Building
 
+### Android Studio
+
 1. Clone the repo
-2. Open in Android Studio
+2. Open in Android Studio (it auto-generates `local.properties` with your SDK path)
 3. Connect a device or start an emulator (API 26+)
 4. Run the app — no API keys or config required
+
+### Command line
+
+Requires **JDK 17+** (Android Studio's bundled JBR works) and the **Android SDK**.
+`local.properties` is not committed, so point Gradle at your SDK either by setting
+the `ANDROID_HOME` env var or by creating a `local.properties` file in the project root:
+
+```properties
+sdk.dir=/path/to/Android/Sdk
+```
+
+Then build the debug APK:
+
+```bash
+./gradlew assembleDebug      # macOS / Linux
+gradlew.bat assembleDebug    # Windows
+```
+
+Output: `app/build/outputs/apk/debug/app-debug.apk`
+
+Install straight onto a connected device:
+
+```bash
+./gradlew installDebug
+```
 
 > GPS features require `ACCESS_FINE_LOCATION` permission. Grant on first launch.
